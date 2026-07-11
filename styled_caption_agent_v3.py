@@ -95,8 +95,6 @@ MOONSHOT_URL = "https://api.moonshot.ai/v1/chat/completions"
 
 ENABLE_JUDGE = False          # Disabled: saves ~30s/video; captions are
                               # fact-grounded by the merge stage already.
-                              # Kimi-k2.6 thinking mode also truncates
-                              # before emitting JSON in practice.
 
 SUPPORTED_STYLES = ["formal", "sarcastic", "humorous_tech",
                     "humorous_non_tech"]
@@ -116,17 +114,19 @@ STYLE_GUIDES = {
                          "comedy about what is actually visible.",
 }
 
-MAX_OVERVIEW_FRAMES = 8
-OVERVIEW_MAX_SIDE = 1344
-MAX_ZOOM_REGIONS = 6
+MAX_OVERVIEW_FRAMES = 5       # was 8; fewer frames = faster Qwen call
+OVERVIEW_MAX_SIDE = 1024      # was 1344; smaller images = faster upload
+MAX_ZOOM_REGIONS = 4          # was 6; fewer crops = fewer tokens
 CROP_MARGIN = 0.15
 CROP_MIN_SIDE = 448
 MIN_BOX_FRAC = 0.08
 RETRY_CONTEXT_SCALE = 3.0
-MAX_CROP_RETRIES = 4
+MAX_CROP_RETRIES = 0          # was 4; skip retries to save ~30s/video
 
-API_RETRIES = 3
-API_RETRY_DELAY = 5
+API_RETRIES = 2               # was 3; fail faster
+API_RETRY_DELAY = 3           # was 5; shorter backoff
+
+PARALLEL_VIDEOS = 5           # process this many videos concurrently
 
 LAST_RESORT_CAPTION = ("A short video clip (automatic captioning was "
                        "unavailable for this item).")
@@ -759,6 +759,15 @@ Rules:
   "a blue street-name sign in Korean") and note the fragment under
   CONFLICTS. If transcriptions disagree by even one character, do the
   same.
+- FINE-ATTRIBUTE RULE: subjective fine attributes (eye color, precise
+  color shades, small counts) enter VERIFIED_FACTS only when TWO
+  sources agree. A single magnified crop cannot override two agreeing
+  full-frame sources on color or shade - haze, backlighting, and JPEG
+  compression distort colors in small crops. When sources disagree on
+  such an attribute, OMIT it entirely rather than picking a side.
+  (Object identity and text transcription keep the normal E4-first
+  hierarchy; this rule covers only subjective color/shade/count
+  attributes.)
 - Do not name cities, countries, brands, or people unless literally
   transcribed under the gate above.
 
@@ -772,7 +781,11 @@ CONFLICTS:
 - contradictions and which side you trusted, or "none"
 
 BASE_CAPTION:
-One neutral, factual, specific caption (1-2 sentences).
+One neutral, factual, specific caption (1-2 sentences). The FIRST
+clause must state the main subject with its key visual attribute, what
+it is doing, and the setting (e.g. "An orange kitten walks along a
+dirt path bordered by green foliage..."); verified distinguishing
+details follow after.
 """
 
 
@@ -795,6 +808,13 @@ REQUESTED STYLES:
 {style_lines}
 
 HARD RULES:
+- CORE COVERAGE: every caption, in every style, must clearly convey
+  (a) the main subject with its key visual attribute (e.g. "orange
+  kitten", "tan dog", "office worker"), (b) what the subject is doing,
+  and (c) the setting. The style wraps AROUND these core elements -
+  irony, jokes, and wordplay may frame them but never replace them. A
+  reader of any single caption must be able to tell what the video
+  shows.
 - Every claim in every caption must come from the fact sheet. Do NOT
   invent objects, people, animals, events, sounds, or places.
 - Never quote any text the fact sheet marks as PARTIAL, partially
@@ -1306,11 +1326,16 @@ def main():
 
     tasks = load_tasks(TASKS_PATH)
     print(f"Loaded {len(tasks)} task(s) from {TASKS_PATH}")
+    print(f"Parallel workers: {PARALLEL_VIDEOS}")
 
     gemini_client = preflight()
 
-    results = []
-    for task in tasks:
+    # Pre-allocate results list (one slot per task, in order).
+    results = [None] * len(tasks)
+    results_lock = __import__("threading").Lock()
+    completed = {"n": 0}
+
+    def run_task(index, task):
         try:
             result = process_task(task, gemini_client)
         except Exception as exc:
@@ -1320,15 +1345,28 @@ def main():
             result = {"task_id": str(task.get("task_id", "unknown")),
                       "captions": {s: LAST_RESORT_CAPTION
                                    for s in styles}}
-        results.append(result)
-        write_results_atomic(results)
-        print(f"[checkpoint] {len(results)}/{len(tasks)} task(s) "
-              f"written to {RESULTS_PATH}")
+        with results_lock:
+            results[index] = result
+            completed["n"] += 1
+            # Write all completed results so far (skip None slots).
+            write_results_atomic([r for r in results if r is not None])
+            print(f"[checkpoint] {completed['n']}/{len(tasks)} task(s) "
+                  f"written to {RESULTS_PATH}")
 
-    write_results_atomic(results)
+    with ThreadPoolExecutor(max_workers=PARALLEL_VIDEOS) as pool:
+        futures = {pool.submit(run_task, i, task): task
+                   for i, task in enumerate(tasks)}
+        for fut in as_completed(futures):
+            exc = fut.exception()
+            if exc:
+                print(f"[error] Worker crashed: {exc}")
+
+    # Final write with all results in task order.
+    write_results_atomic([r for r in results if r is not None])
     print("\n" + "=" * 54)
-    print(f"DONE - {len(results)} result(s) in {RESULTS_PATH}")
-    for r in results:
+    final = [r for r in results if r is not None]
+    print(f"DONE - {len(final)} result(s) in {RESULTS_PATH}")
+    for r in final:
         print(f"  {r['task_id']}: {list(r['captions'].keys())}")
     print("=" * 54)
 
