@@ -1,26 +1,32 @@
-FROM python:3.11-slim
+name: Build and Push Caption Agent
 
-# ffmpeg/ffprobe for audio ground truth
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg libgl1 libglib2.0-0 && \
-    rm -rf /var/lib/apt/lists/*
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
-# Python deps — pinned for reproducibility, no cache for image size
-RUN pip install --no-cache-dir \
-    google-genai>=2.11.0 \
-    opencv-python-headless>=4.10 \
-    requests>=2.31 \
-    scenedetect>=0.7
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-# Create the output directory (input is mounted by the harness)
-RUN mkdir -p /output
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-# Copy the agent
-COPY styled_caption_agent_v3.py /app/agent.py
-
-WORKDIR /app
-
-# The harness injects API keys as env vars:
-#   GEMINI_API_KEY, OPENROUTER_API_KEY, ANTHROPIC_API_KEY, MOONSHOT_API_KEY
-
-ENTRYPOINT ["python", "-u", "agent.py"]
+      - name: Build and push (linux/amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/caption-agent:latest
+          build-args: |
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
+            ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+            MOONSHOT_API_KEY=${{ secrets.MOONSHOT_API_KEY }}
