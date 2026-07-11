@@ -1,0 +1,12 @@
+__pycache__
+*.pyc
+.git
+smoke_out*
+e2e
+verify
+frames
+output
+caption_debug
+*.mp4
+*.jpg
+*.png
