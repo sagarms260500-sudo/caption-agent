@@ -4,7 +4,9 @@ import json
 import cv2
 import signal
 import tempfile
+import threading
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 import summarizer
@@ -142,21 +144,33 @@ def main():
     gemini_client = summarizer.create_client(GEMINI_API_KEY)
     print("Keys OK\n")
 
-    results = []
-    for i, task in enumerate(tasks):
+    results = [None] * len(tasks)
+    lock = threading.Lock()
+    done = {"n": 0}
+
+    def run(i, task):
         task.setdefault("task_id", f"task_{i + 1}")
         try:
-            result = process_task(task, gemini_client)
+            res = process_task(task, gemini_client)
         except Exception as e:
             print(f"[error] {task.get('task_id')}: {e}")
             styles = task.get("styles") or STYLES
-            result = {"task_id": str(task.get("task_id")),
-                      "captions": {s: FALLBACK for s in styles}}
-        results.append(result)
-        write_results(results)
-        print(f"[checkpoint] {len(results)}/{len(tasks)}")
+            res = {"task_id": str(task.get("task_id")),
+                   "captions": {s: FALLBACK for s in styles}}
+        with lock:
+            results[i] = res
+            done["n"] += 1
+            write_results([r for r in results if r is not None])
+            print(f"[checkpoint] {done['n']}/{len(tasks)}")
 
-    print(f"\nDONE - {len(results)}/{len(tasks)} -> {RESULTS_PATH}")
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futs = [pool.submit(run, i, t) for i, t in enumerate(tasks)]
+        for f in as_completed(futs):
+            if f.exception():
+                print(f"[error] {f.exception()}")
+
+    write_results([r for r in results if r is not None])
+    print(f"\nDONE - {done['n']}/{len(tasks)} -> {RESULTS_PATH}")
 
 
 if __name__ == "__main__":
