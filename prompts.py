@@ -1,19 +1,19 @@
 STYLE_GUIDES = {
     "formal": (
         "Professional, objective, factual. One or two calm sentences. "
-        "1-2 sentences, 25-35 words.. START with the subject. No jokes, no metadata."
+        "1-2 sentences, keep concise. START with the subject. No jokes, no metadata."
     ),
     "sarcastic": (
         "Dry, ironic, lightly mocking but STILL ACCURATE. ONE sentence, "
-        "10-20 words. START with the subject. Deadpan understatement."
+        "ONE sentence. START with the subject. Deadpan understatement."
     ),
     "humorous_tech": (
         "Funny tech metaphor mapped onto real video content. ONE or two "
-        "short lines, 15-25 words. START with the subject, not jargon."
+        "ONE or two short lines. START with the subject, not jargon."
     ),
     "humorous_non_tech": (
         "Funny everyday humour, ZERO technical words. ONE sentence, "
-        "10-20 words. START with the subject. Observational comedy."
+        "ONE sentence. START with the subject. Observational comedy."
     ),
 }
 
@@ -139,7 +139,7 @@ Write ONE caption per style:
 {REGISTER_EXAMPLES}
 
 LENGTH:
-- formal: 1-2 sentences, 20-35 words. No clothing lists.
+- formal: 1-2 sentences, 25-35 words keep concise. No clothing lists.
 - sarcastic: ONE sentence, 10-20 words.
 - humorous_tech: 1-2 short lines, 15-25 words. Subject first, not jargon.
 - humorous_non_tech: ONE sentence, 10-20 words. ZERO tech words.
