@@ -1,7 +1,7 @@
 STYLE_GUIDES = {
     "formal": (
         "Professional, objective, factual. One or two calm sentences. "
-        "Maximum 25 words. START with the subject. No jokes, no metadata."
+        "1-2 sentences, 25-35 words.. START with the subject. No jokes, no metadata."
     ),
     "sarcastic": (
         "Dry, ironic, lightly mocking but STILL ACCURATE. ONE sentence, "
@@ -139,7 +139,7 @@ Write ONE caption per style:
 {REGISTER_EXAMPLES}
 
 LENGTH:
-- formal: 1-2 sentences, MAX 25 words. No clothing lists.
+- formal: 1-2 sentences, 20-35 words. No clothing lists.
 - sarcastic: ONE sentence, 10-20 words.
 - humorous_tech: 1-2 short lines, 15-25 words. Subject first, not jargon.
 - humorous_non_tech: ONE sentence, 10-20 words. ZERO tech words.
