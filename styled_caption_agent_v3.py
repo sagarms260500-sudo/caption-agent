@@ -1,14 +1,12 @@
 """
 styled_caption_agent_v4.py
 
-Video caption agent - four models, chained, calibrated for accuracy.
+Video caption agent - three models, calibrated for accuracy + speed.
 
-Chain per video (5 calls, videos run in parallel):
+Chain per video (3 calls, videos run in parallel):
     1. Gemini 3.5 Flash  (Google AI Studio) - watch video, scene summary
     2. Qwen3-VL-235B     (OpenRouter)       - validate Gemini vs frames
     3. Claude Sonnet 4.6 (Anthropic)        - merge + write 4 styled captions
-    4. Gemma 3 27B       (Google AI Studio) - judge vs style checklist
-    5. Claude Sonnet 4.6 (Anthropic)        - rewrite ONLY if Gemma flags
 
 Calibrated against the official Track 2 guidance:
     - Accurate captions, correct style, specific video details,
@@ -28,7 +26,7 @@ Install:
     pip install -U google-genai opencv-python requests scenedetect
 
 Env keys:
-    GEMINI_API_KEY      (Gemini + Gemma, both Google AI Studio)
+    GEMINI_API_KEY      (Gemini, Google AI Studio)
     OPENROUTER_API_KEY  (Qwen3-VL)
     ANTHROPIC_API_KEY   (Claude)
 """
@@ -66,8 +64,6 @@ ANTHROPIC_API_KEY = ""
 
 GEMINI_MODEL = "gemini-3.5-flash"
 GEMINI_MEDIA_RESOLUTION = "MEDIA_RESOLUTION_HIGH"
-GEMMA_MODEL = "gemma-4-31b-it"          # same Google AI Studio key
-
 QWEN_MODEL = "qwen/qwen3-vl-235b-a22b-thinking"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -82,7 +78,6 @@ PARALLEL_VIDEOS = 8
 MAX_FRAMES = 5
 FRAME_MAX_SIDE = 1024
 
-ENABLE_GEMMA_JUDGE = True     # stage 4 + conditional rewrite
 API_RETRIES = 2
 API_RETRY_DELAY = 3
 HARD_TIMEOUT = int(os.environ.get("HARD_TIMEOUT", 540))   # 9 min
@@ -324,16 +319,6 @@ def call_claude(prompt, max_tokens=2000, temperature=0.7):
     return with_retries("Claude", post)
 
 
-def call_gemma(client, prompt):
-    """Gemma 4 31B via Google AI Studio. NO retries - if it 500s, skip."""
-    resp = client.models.generate_content(model=GEMMA_MODEL,
-                                          contents=[prompt])
-    text = (resp.text or "").strip()
-    if not text:
-        raise RuntimeError("empty Gemma response")
-    return text
-
-
 # ============================================================
 # VIDEO + FRAMES
 # ============================================================
@@ -555,8 +540,16 @@ Decide three things:
    large object, the general setting). Do NOT hunt for small details, do
    not read small text, do not add micro-observations.
 3. RISKY - statements that look like guesses rather than observations:
-   named places/landmarks/brands, species or material names, quoted text
-   you cannot clearly read in the frames.
+   named places, cities, countries, landmarks, monuments, buildings,
+   bridges, brands, or companies identified from visual appearance
+   rather than from clearly legible on-screen text (e.g. saying
+   "Statue of Liberty", "Shibuya", "New York", "Javits Center",
+   "Starbucks" based on what a building or skyline looks like - these
+   are guesses even if correct, and must be flagged).
+   Also flag: species or material names stated as fact ("granite",
+   "ginkgo", "Labrador"), quoted text you cannot clearly read in the
+   frames, and any other claim that goes beyond what the frames
+   plainly show.
 
 Be conservative. If the frames do not clearly contradict something, it is
 NOT wrong - still frames cannot show motion, sound, or events between
@@ -671,139 +664,6 @@ def claude_write(gemini_summary, qwen_report, audio_status, styles):
 
 
 # ============================================================
-# STAGE 4 - GEMMA: JUDGE AGAINST THE OFFICIAL CRITERIA
-# ============================================================
-
-def build_judge_prompt(gemini_summary, qwen_report, captions):
-    return f"""
-You are a strict caption judge for a video captioning competition. Score
-captions exactly the way the official evaluation judge would, using the
-official scoring criteria below.
-
-WHAT THE VIDEO CONTAINS (the only ground truth you have):
-
-Full-video analysis:
-{gemini_summary}
-
-Frame fact-check:
-{qwen_report}
-
-CAPTIONS TO JUDGE:
-{json.dumps(captions, ensure_ascii=False, indent=2)}
-
-====================================================================
-OFFICIAL SCORING CRITERIA (from the competition rules):
-1. Caption accuracy (0-1): how faithfully the caption reflects the
-   video content. Focus on: accurate captions, specific video details,
-   no major hallucinations.
-2. Style match (0-1): how well the caption matches the requested tone.
-
-OFFICIAL STYLE CHECKLIST:
-- Formal: clear and professional.
-- Sarcastic: sarcastic but still accurate.
-- Humorous tech: tech humor plus real video details.
-- humorous_non_tech: funny, everyday humour with no technical jargon.
-
-====================================================================
-
-EXPECTED REGISTER (what high-scoring captions look like):
-- formal: 1-2 calm factual sentences. Describes subject+action+setting.
-  NOT a spec sheet, NOT an inventory list. No metadata.
-- sarcastic: ONE short, dry line. Still tells you what is in the video.
-  Often uses "Ah yes" or deadpan framing.
-- humorous_tech: ONE or two lines. Uses a tech METAPHOR mapped to real
-  content. "When you..." format is common but not required.
-- humorous_non_tech: ONE short line. Everyday observational humour.
-  ZERO technical words. "When you..." format is common but not required.
-- ALL styles: short. The references are 10-30 words each. Captions
-  exceeding 40 words are almost certainly too long.
-
-FAIL a caption if ANY of these are true:
-- It states something not supported by the ground truth (hallucination).
-- It does not make clear what the video shows (subject, action, setting).
-- It names a place, city, landmark, brand, species or material not in
-  the ground truth.
-- It quotes on-screen text not marked CONFIRMED in the ground truth.
-- It mentions resolution, fps, file duration, audio track, or
-  "silent mode".
-- formal: more than 2 sentences, or reads like an inventory/spec sheet
-  rather than the calm descriptive register of the references.
-- sarcastic or humorous_non_tech: more than 1 sentence.
-- humorous_non_tech contains ANY tech word (code, server, deploy,
-  render, pipeline, thread, node, fps, audio, buffer, etc).
-- The tone does not match its style (a sarcastic caption that is not
-  actually ironic, or a humorous caption that is not actually funny).
-- The caption is significantly longer or more wordy than expected
-  for its style.
-
-OUTPUT: reply with ONLY a raw JSON object (no markdown, no fences):
-{{"verdicts": {{"formal": {{"pass": true, "fix": ""}},
-"sarcastic": {{"pass": false, "fix": "specific instruction to fix"}},
-"humorous_tech": {{"pass": true, "fix": ""}},
-"humorous_non_tech": {{"pass": true, "fix": ""}}}}}}
-
-"fix" must be a concrete, actionable instruction (what to remove, add,
-shorten, or rephrase). Empty string when the caption passes.
-"""
-
-
-def gemma_judge(client, gemini_summary, qwen_report, captions):
-    raw = call_gemma(client, build_judge_prompt(gemini_summary,
-                                                qwen_report, captions))
-    verdicts = extract_json_object(raw).get("verdicts", {})
-    if not isinstance(verdicts, dict):
-        raise ValueError("judge returned no verdicts")
-    return verdicts
-
-
-# ============================================================
-# STAGE 5 - CLAUDE: REWRITE ONLY WHAT FAILED
-# ============================================================
-
-def build_rewrite_prompt(gemini_summary, qwen_report, captions,
-                         verdicts, styles):
-    style_lines = "\n".join(f'- "{s}": {STYLE_GUIDES[s]}' for s in styles)
-    keys = ", ".join(f'"{s}"' for s in styles)
-    return f"""
-A judge reviewed your captions. Fix the ones that failed.
-
-GROUND TRUTH about the video:
-
-Full-video analysis:
-{gemini_summary}
-
-Frame fact-check:
-{qwen_report}
-
-YOUR CURRENT CAPTIONS:
-{json.dumps(captions, ensure_ascii=False, indent=2)}
-
-JUDGE VERDICTS (fix every entry where "pass" is false; keep the passing
-captions EXACTLY as they are):
-{json.dumps(verdicts, ensure_ascii=False, indent=2)}
-
-STYLES:
-{style_lines}
-
-{ACCURACY_RULES}
-
-LENGTH: formal 1-2 sentences; sarcastic ONE sentence; humorous_tech one
-or two short lines; humorous_non_tech ONE sentence.
-
-OUTPUT: reply with ONLY a raw JSON object containing ALL of these keys:
-{keys}
-"""
-
-
-def claude_rewrite(gemini_summary, qwen_report, captions, verdicts,
-                   styles):
-    prompt = build_rewrite_prompt(gemini_summary, qwen_report, captions,
-                                  verdicts, styles)
-    raw = call_claude(prompt, max_tokens=1500, temperature=0.7)
-    return validate_captions(extract_json_object(raw), styles)
-
-
-# ============================================================
 # PER-VIDEO CHAIN
 # ============================================================
 
@@ -861,31 +721,6 @@ def process_task(task, google_client):
         return {"task_id": task_id,
                 "captions": {s: LAST_RESORT_CAPTION for s in styles}}
 
-    # Stage 4 + 5 - Gemma judges, Claude rewrites only if needed
-    if ENABLE_GEMMA_JUDGE:
-        try:
-            print(f"[{task_id}] Stage 4: Gemma judge...")
-            verdicts = gemma_judge(google_client, gemini_summary,
-                                   qwen_report, captions)
-            print(f"[{task_id}] verdicts: "
-                  f"{json.dumps(verdicts, ensure_ascii=False)}")
-            failed = [s for s in styles
-                      if not verdicts.get(s, {}).get("pass", True)]
-            if failed:
-                print(f"[{task_id}] Stage 5: Claude rewrite {failed}...")
-                revised = claude_rewrite(gemini_summary, qwen_report,
-                                         captions, verdicts, styles)
-                # keep passing captions untouched
-                for s in styles:
-                    if s in failed:
-                        captions[s] = revised[s]
-                print(f"\n--- [{task_id}] REVISED ---\n"
-                      f"{json.dumps(captions, ensure_ascii=False, indent=2)}")
-            else:
-                print(f"[{task_id}] all captions passed - no rewrite")
-        except Exception as exc:
-            print(f"[warn][{task_id}] judge stage skipped: {exc}")
-
     return {"task_id": task_id, "captions": captions}
 
 
@@ -921,7 +756,7 @@ def preflight():
 def main():
     print("=" * 56)
     print("STYLED VIDEO CAPTION AGENT v4")
-    print("Gemini -> Qwen -> Claude -> Gemma -> Claude")
+    print("Gemini -> Qwen -> Claude")
     print("=" * 56)
 
     tasks = load_tasks(TASKS_PATH)
