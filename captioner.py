@@ -35,7 +35,7 @@ def _call_claude(api_key, prompt):
     payload = {
         "model": MODEL,
         "max_tokens": 1500,
-        "temperature": 0.8,
+        "temperature": 0.5,
         "messages": [{"role": "user", "content": prompt}]
     }
     headers = {
