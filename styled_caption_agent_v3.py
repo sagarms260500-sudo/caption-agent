@@ -66,7 +66,7 @@ ANTHROPIC_API_KEY = ""
 
 GEMINI_MODEL = "gemini-3.5-flash"
 GEMINI_MEDIA_RESOLUTION = "MEDIA_RESOLUTION_HIGH"
-GEMMA_MODEL = "gemma-3-27b-it"          # same Google AI Studio key
+GEMMA_MODEL = "gemma-4-31b-it"          # same Google AI Studio key
 
 QWEN_MODEL = "qwen/qwen3-vl-235b-a22b-thinking"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
