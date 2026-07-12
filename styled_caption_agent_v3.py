@@ -78,7 +78,7 @@ ANTHROPIC_VERSION = "2023-06-01"
 SUPPORTED_STYLES = ["formal", "sarcastic", "humorous_tech",
                     "humorous_non_tech"]
 
-PARALLEL_VIDEOS = 5
+PARALLEL_VIDEOS = 8
 MAX_FRAMES = 5
 FRAME_MAX_SIDE = 1024
 
@@ -164,6 +164,9 @@ ACCURACY RULES (these decide the score):
      "Labrador") unless the FACT SHEET states them.
    - Technical metadata: resolution, frame rate, fps, file duration,
      "N-second clip", codec, bitrate. Never in any caption.
+   - Audio/silence meta-commentary: do NOT mention "no audio track",
+     "silent mode", "no audio stream", or that the video is silent in
+     ANY style. Audio status is a file property, not video content.
    - Precise counts of things that are hard to count. Say "several".
 5. Prefer omitting an uncertain detail over risking a wrong one. A short
    correct caption beats a long caption with one error.
@@ -322,16 +325,13 @@ def call_claude(prompt, max_tokens=2000, temperature=0.7):
 
 
 def call_gemma(client, prompt):
-    """Gemma 3 27B via the same Google AI Studio client (text-only)."""
-    def go():
-        resp = client.models.generate_content(model=GEMMA_MODEL,
-                                              contents=[prompt])
-        text = (resp.text or "").strip()
-        if not text:
-            raise RuntimeError("empty Gemma response")
-        return text
-
-    return with_retries("Gemma", go)
+    """Gemma 4 31B via Google AI Studio. NO retries - if it 500s, skip."""
+    resp = client.models.generate_content(model=GEMMA_MODEL,
+                                          contents=[prompt])
+    text = (resp.text or "").strip()
+    if not text:
+        raise RuntimeError("empty Gemma response")
+    return text
 
 
 # ============================================================
@@ -625,16 +625,18 @@ STYLES:
 
 {REGISTER_EXEMPLARS}
 
-LENGTH (this is scored - do not exceed):
-- formal: 1-2 sentences.
-- sarcastic: ONE sentence.
-- humorous_tech: ONE or two short lines.
-- humorous_non_tech: ONE sentence.
+LENGTH (this is scored - exceeding these WILL lower your score):
+- formal: EXACTLY one or two sentences. Not three. Combine details
+  into flowing clauses rather than adding sentences.
+- sarcastic: ONE sentence only. Must still name the subject.
+- humorous_tech: ONE or two SHORT lines. Must still name the subject.
+- humorous_non_tech: ONE sentence only. Must still name the subject.
+  Must contain ZERO technical words (no code, servers, deployment,
+  render, pipeline, threads, nodes, fps, audio track, etc).
 
 Every caption, in every style, must make clear WHAT the video shows -
 the humour wraps around the real subject, action and setting, it never
-replaces them. A funny caption that does not tell you what is in the
-video scores zero on accuracy.
+replaces them.
 
 OUTPUT: reply with ONLY a raw JSON object (no markdown, no fences, no
 commentary) with exactly these keys: {keys}
@@ -674,9 +676,9 @@ def claude_write(gemini_summary, qwen_report, audio_status, styles):
 
 def build_judge_prompt(gemini_summary, qwen_report, captions):
     return f"""
-You are a strict caption judge. Score captions the way an evaluation
-judge would, on TWO dimensions: caption accuracy (does it faithfully
-reflect the video?) and style match (does it match the requested tone?).
+You are a strict caption judge for a video captioning competition. Score
+captions exactly the way the official evaluation judge would, using the
+official scoring criteria below.
 
 WHAT THE VIDEO CONTAINS (the only ground truth you have):
 
@@ -689,40 +691,59 @@ Frame fact-check:
 CAPTIONS TO JUDGE:
 {json.dumps(captions, ensure_ascii=False, indent=2)}
 
-STYLE REQUIREMENTS:
-- formal: clear, professional, factual. 1-2 sentences.
-- sarcastic: dry/ironic BUT STILL ACCURATE. ONE sentence.
-- humorous_tech: tech or programming humour PLUS real video details.
-  One or two short lines.
-- humorous_non_tech: everyday humour with NO technical jargon at all
-  (no code, servers, deployment, frame rate, software words). ONE
-  sentence.
+====================================================================
+OFFICIAL SCORING CRITERIA (from the competition rules):
+1. Caption accuracy (0-1): how faithfully the caption reflects the
+   video content. Focus on: accurate captions, specific video details,
+   no major hallucinations.
+2. Style match (0-1): how well the caption matches the requested tone.
+
+OFFICIAL STYLE CHECKLIST:
+- Formal: clear and professional.
+- Sarcastic: sarcastic but still accurate.
+- Humorous tech: tech humor plus real video details.
+- humorous_non_tech: funny, everyday humour with no technical jargon.
+
+====================================================================
+
+EXPECTED REGISTER (what high-scoring captions look like):
+- formal: 1-2 calm factual sentences. Describes subject+action+setting.
+  NOT a spec sheet, NOT an inventory list. No metadata.
+- sarcastic: ONE short, dry line. Still tells you what is in the video.
+  Often uses "Ah yes" or deadpan framing.
+- humorous_tech: ONE or two lines. Uses a tech METAPHOR mapped to real
+  content. "When you..." format is common but not required.
+- humorous_non_tech: ONE short line. Everyday observational humour.
+  ZERO technical words. "When you..." format is common but not required.
+- ALL styles: short. The references are 10-30 words each. Captions
+  exceeding 40 words are almost certainly too long.
 
 FAIL a caption if ANY of these are true:
-- It states something not supported by the ground truth above
-  (a hallucination).
-- It does not make clear what the video actually shows (subject, action,
-  setting).
-- It names a place, city, landmark, brand, species or material that the
-  ground truth does not confirm.
-- It quotes on-screen text that is not marked CONFIRMED.
-- It mentions resolution, frame rate, fps or file duration.
-- It is far too long for its style (see lengths above), or it reads like
-  a list of details instead of a caption.
-- humorous_non_tech contains ANY technical word.
-- A humorous or sarcastic caption is not actually funny or ironic.
-
-Judge each style. Be strict but fair - do not fail a caption merely for
-being concise.
+- It states something not supported by the ground truth (hallucination).
+- It does not make clear what the video shows (subject, action, setting).
+- It names a place, city, landmark, brand, species or material not in
+  the ground truth.
+- It quotes on-screen text not marked CONFIRMED in the ground truth.
+- It mentions resolution, fps, file duration, audio track, or
+  "silent mode".
+- formal: more than 2 sentences, or reads like an inventory/spec sheet
+  rather than the calm descriptive register of the references.
+- sarcastic or humorous_non_tech: more than 1 sentence.
+- humorous_non_tech contains ANY tech word (code, server, deploy,
+  render, pipeline, thread, node, fps, audio, buffer, etc).
+- The tone does not match its style (a sarcastic caption that is not
+  actually ironic, or a humorous caption that is not actually funny).
+- The caption is significantly longer or more wordy than expected
+  for its style.
 
 OUTPUT: reply with ONLY a raw JSON object (no markdown, no fences):
 {{"verdicts": {{"formal": {{"pass": true, "fix": ""}},
-"sarcastic": {{"pass": false, "fix": "specific instruction to fix it"}},
+"sarcastic": {{"pass": false, "fix": "specific instruction to fix"}},
 "humorous_tech": {{"pass": true, "fix": ""}},
 "humorous_non_tech": {{"pass": true, "fix": ""}}}}}}
 
-"fix" must be a concrete, actionable instruction (what to remove, what to
-add, how to shorten). Empty string when the caption passes.
+"fix" must be a concrete, actionable instruction (what to remove, add,
+shorten, or rephrase). Empty string when the caption passes.
 """
 
 
@@ -944,7 +965,7 @@ if __name__ == "__main__":
 
     def _timeout(signum, frame):
         print("\n[TIMEOUT] approaching limit - exiting with what we have")
-        raise SystemExit(0)
+        os._exit(0)   # hard exit; results already written atomically
 
     if hasattr(signal, "SIGALRM"):
         signal.signal(signal.SIGALRM, _timeout)
