@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import time
 import cv2
 import signal
 import tempfile
@@ -20,7 +21,7 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
-MAX_FRAMES = 6
+MAX_FRAMES = 5
 FRAME_SIZE = 768
 TIMEOUT = int(os.environ.get("HARD_TIMEOUT", "540"))
 FALLBACK = "A short video clip."
@@ -100,15 +101,19 @@ def process_task(task, gemini_client):
             print(f"[{task_id}] GEMINI:\n{summary}")
 
             qwen_report = "Validation unavailable."
-            try:
-                print(f"[{task_id}] Qwen...")
-                frames = extract_frames(video_path, duration, fps, td)
-                if frames:
-                    qwen_report = validator.validate(
-                        OPENROUTER_API_KEY, frames, summary)
-                    print(f"[{task_id}] QWEN:\n{qwen_report}")
-            except Exception as e:
-                print(f"[warn][{task_id}] Qwen skipped: {e}")
+            elapsed = time.time() - _state["start_time"]
+            if elapsed > SKIP_QWEN_AFTER:
+                print(f"[{task_id}] Qwen skipped (time budget: {elapsed:.0f}s)")
+            else:
+                try:
+                    print(f"[{task_id}] Qwen...")
+                    frames = extract_frames(video_path, duration, fps, td)
+                    if frames:
+                        qwen_report = validator.validate(
+                            OPENROUTER_API_KEY, frames, summary)
+                        print(f"[{task_id}] QWEN:\n{qwen_report}")
+                except Exception as e:
+                    print(f"[warn][{task_id}] Qwen skipped: {e}")
 
         print(f"[{task_id}] Claude...")
         captions = captioner.write_captions(
@@ -131,7 +136,10 @@ def write_results(results):
     os.replace(tmp, path)
 
 
-_state = {"tasks": [], "results": [], "lock": threading.Lock()}
+_state = {"tasks": [], "results": [], "lock": threading.Lock(),
+          "start_time": 0}
+
+SKIP_QWEN_AFTER = 420  # skip Qwen after 5 minutes to save time
 
 
 def main():
@@ -145,6 +153,7 @@ def main():
 
     check_keys()
     gemini_client = summarizer.create_client(GEMINI_API_KEY)
+    _state["start_time"] = time.time()
     print("Keys OK\n")
 
     results = [None] * len(tasks)
