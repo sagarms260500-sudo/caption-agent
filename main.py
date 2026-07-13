@@ -65,7 +65,6 @@ def extract_frames(video_path, duration, fps, out_dir):
     else:
         timestamps = [round(i * last / (MAX_FRAMES - 1), 2)
                       for i in range(MAX_FRAMES)]
-
     cap = cv2.VideoCapture(video_path)
     paths = []
     for i, t in enumerate(timestamps, 1):
@@ -87,43 +86,42 @@ def extract_frames(video_path, duration, fps, out_dir):
 def process_task(task, gemini_client):
     task_id = str(task.get("task_id", "unknown"))
     styles = task.get("styles") or STYLES
-    print(f"\n===== TASK {task_id} =====")
 
     try:
         with tempfile.TemporaryDirectory() as td:
+            t0 = time.time()
             video_path = download_video(task["video_url"],
                                         os.path.join(td, "video.mp4"))
             duration, fps = get_duration(video_path)
-            print(f"[{task_id}] {duration:.1f}s")
+            dl = time.time() - t0
 
-            print(f"[{task_id}] Gemini...")
+            t1 = time.time()
             summary = summarizer.summarize(gemini_client, video_path)
-            print(f"[{task_id}] GEMINI:\n{summary}")
+            gem = time.time() - t1
 
+            t2 = time.time()
             qwen_report = "Validation unavailable."
-            elapsed = time.time() - _state["start_time"]
-            if elapsed > SKIP_QWEN_AFTER:
-                print(f"[{task_id}] Qwen skipped (time budget: {elapsed:.0f}s)")
-            else:
-                try:
-                    print(f"[{task_id}] Qwen...")
-                    frames = extract_frames(video_path, duration, fps, td)
-                    if frames:
-                        qwen_report = validator.validate(
-                            OPENROUTER_API_KEY, frames, summary)
-                        print(f"[{task_id}] QWEN:\n{qwen_report}")
-                except Exception as e:
-                    print(f"[warn][{task_id}] Qwen skipped: {e}")
+            try:
+                frames = extract_frames(video_path, duration, fps, td)
+                if frames:
+                    qwen_report = validator.validate(
+                        OPENROUTER_API_KEY, frames, summary)
+                qw = time.time() - t2
+            except Exception as e:
+                qw = time.time() - t2
+                print(f"[{task_id}] Qwen FAIL: {e}")
 
-        print(f"[{task_id}] Claude...")
+        t3 = time.time()
         captions = captioner.write_captions(
             ANTHROPIC_API_KEY, summary, qwen_report, styles)
-        print(f"[{task_id}] CAPTIONS:")
-        print(json.dumps(captions, ensure_ascii=False, indent=2))
+        cl = time.time() - t3
+
+        total = dl + gem + qw + cl
+        print(f"[{task_id}] dl:{dl:.0f}s gem:{gem:.0f}s qw:{qw:.0f}s cl:{cl:.0f}s = {total:.0f}s")
         return {"task_id": task_id, "captions": captions}
 
     except Exception as e:
-        print(f"[error][{task_id}] {e}")
+        print(f"[{task_id}] FAIL: {e}")
         return {"task_id": task_id,
                 "captions": {s: FALLBACK for s in styles}}
 
@@ -136,32 +134,26 @@ def write_results(results):
     os.replace(tmp, path)
 
 
-_state = {"tasks": [], "results": [], "lock": threading.Lock(),
-          "start_time": 0}
-
-SKIP_QWEN_AFTER = 300  # skip Qwen after 5 minutes to save time
+_state = {"tasks": [], "results": [], "lock": threading.Lock()}
 
 
 def main():
     print("=" * 50)
-    print("VIDEO CAPTION AGENT")
-    print("Gemini -> Qwen -> Claude")
+    print("DEBUG TIMING RUN")
     print("=" * 50)
 
     tasks = json.loads(Path(TASKS_PATH).read_text())
-    print(f"Loaded {len(tasks)} task(s)")
+    print(f"Loaded {len(tasks)} task(s) | workers: 6")
 
     check_keys()
     gemini_client = summarizer.create_client(GEMINI_API_KEY)
-    _state["start_time"] = time.time()
+    start = time.time()
+    _state["tasks"] = tasks
     print("Keys OK\n")
 
     results = [None] * len(tasks)
-    lock = _state["lock"]
-    done = {"n": 0}
-
-    _state["tasks"] = tasks
     _state["results"] = results
+    lock = _state["lock"]
 
     def run(i, task):
         task.setdefault("task_id", f"task_{i + 1}")
@@ -174,9 +166,10 @@ def main():
                    "captions": {s: FALLBACK for s in styles}}
         with lock:
             results[i] = res
-            done["n"] += 1
-            _flush_results()
-            print(f"[checkpoint] {done['n']}/{len(tasks)}")
+            done = sum(1 for r in results if r is not None)
+            write_results([r for r in results if r is not None])
+            elapsed = time.time() - start
+            print(f"[checkpoint] {done}/{len(tasks)} @ {elapsed:.0f}s")
 
     with ThreadPoolExecutor(max_workers=6) as pool:
         futs = [pool.submit(run, i, t) for i, t in enumerate(tasks)]
@@ -184,36 +177,31 @@ def main():
             if f.exception():
                 print(f"[error] {f.exception()}")
 
-    _fill_missing()
-    _flush_results()
-    print(f"\nDONE - {len(tasks)}/{len(tasks)} -> {RESULTS_PATH}")
-
-
-def _fill_missing():
-    tasks = _state["tasks"]
-    results = _state["results"]
     for i, task in enumerate(tasks):
         if results[i] is None:
             tid = str(task.get("task_id", f"task_{i + 1}"))
             styles = task.get("styles") or STYLES
             results[i] = {"task_id": tid,
                           "captions": {s: FALLBACK for s in styles}}
-            print(f"[rescue] {tid} filled with fallback")
+            print(f"[rescue] {tid}")
 
-
-def _flush_results():
-    results = _state["results"]
-    write_results([r for r in results if r is not None])
+    write_results(results)
+    total = time.time() - start
+    print(f"\nDONE {len(tasks)}/{len(tasks)} in {total:.0f}s")
 
 
 if __name__ == "__main__":
     def _timeout(signum, frame):
-        print("\n[TIMEOUT] filling missing tasks and exiting")
-        try:
-            _fill_missing()
-            _flush_results()
-        except Exception:
-            pass
+        print("\n[TIMEOUT]")
+        tasks = _state["tasks"]
+        results = _state["results"]
+        for i, task in enumerate(tasks):
+            if results[i] is None:
+                tid = str(task.get("task_id", f"task_{i + 1}"))
+                styles = task.get("styles") or STYLES
+                results[i] = {"task_id": tid,
+                              "captions": {s: FALLBACK for s in styles}}
+        write_results([r for r in results if r is not None])
         os._exit(0)
 
     if hasattr(signal, "SIGALRM"):
