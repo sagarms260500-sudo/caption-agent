@@ -139,7 +139,7 @@ def write_results(results):
 _state = {"tasks": [], "results": [], "lock": threading.Lock(),
           "start_time": 0}
 
-SKIP_QWEN_AFTER = 420  # skip Qwen after 5 minutes to save time
+SKIP_QWEN_AFTER = 300  # skip Qwen after 5 minutes to save time
 
 
 def main():
