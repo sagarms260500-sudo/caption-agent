@@ -35,7 +35,7 @@ def _call_claude(api_key, prompt):
     payload = {
         "model": MODEL,
         "max_tokens": 1500,
-        "temperature": 0.5,
+        "temperature": 0.6,
         "messages": [{"role": "user", "content": prompt}]
     }
     headers = {
@@ -43,42 +43,25 @@ def _call_claude(api_key, prompt):
         "anthropic-version": VERSION,
         "content-type": "application/json"
     }
-
-    for attempt in range(2):
-        try:
-            r = requests.post(URL, headers=headers, json=payload, timeout=240)
-            if r.status_code != 200:
-                raise RuntimeError(f"Claude HTTP {r.status_code}: {r.text[:300]}")
-            blocks = r.json().get("content", [])
-            text = "".join(b.get("text", "") for b in blocks
-                          if b.get("type") == "text").strip()
-            if not text:
-                raise RuntimeError("empty Claude response")
-            return text
-        except Exception as e:
-            if "HTTP 400" in str(e) or "HTTP 401" in str(e):
-                raise
-            if attempt == 1:
-                raise
-            print(f"[retry] Claude: {e}")
+    r = requests.post(URL, headers=headers, json=payload, timeout=240)
+    if r.status_code != 200:
+        raise RuntimeError(f"Claude HTTP {r.status_code}: {r.text[:300]}")
+    blocks = r.json().get("content", [])
+    text = "".join(b.get("text", "") for b in blocks
+                  if b.get("type") == "text").strip()
+    if not text:
+        raise RuntimeError("empty Claude response")
+    return text
 
 
 def write_captions(api_key, gemini_summary, qwen_report, styles):
     prompt = build_caption_prompt(gemini_summary, qwen_report, styles)
-
-    for attempt in range(2):
-        raw = _call_claude(api_key, prompt)
-        try:
-            obj = _extract_json(raw)
-            captions = {}
-            for s in styles:
-                val = obj.get(s)
-                if not isinstance(val, str) or not val.strip():
-                    raise ValueError(f"missing '{s}'")
-                captions[s] = " ".join(val.split())
-            return captions
-        except Exception as e:
-            print(f"[warn] caption JSON invalid (try {attempt + 1}): {e}")
-            prompt += "\n\nREMINDER: output ONLY the raw JSON object."
-
-    raise RuntimeError("caption generation failed after retries")
+    raw = _call_claude(api_key, prompt)
+    obj = _extract_json(raw)
+    captions = {}
+    for s in styles:
+        val = obj.get(s)
+        if not isinstance(val, str) or not val.strip():
+            raise ValueError(f"missing '{s}'")
+        captions[s] = " ".join(val.split())
+    return captions
