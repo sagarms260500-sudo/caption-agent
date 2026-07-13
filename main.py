@@ -169,7 +169,7 @@ def main():
             _flush_results()
             print(f"[checkpoint] {done['n']}/{len(tasks)}")
 
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    with ThreadPoolExecutor(max_workers=5) as pool:
         futs = [pool.submit(run, i, t) for i, t in enumerate(tasks)]
         for f in as_completed(futs):
             if f.exception():
