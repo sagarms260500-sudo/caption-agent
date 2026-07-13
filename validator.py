@@ -39,7 +39,7 @@ def validate(api_key, frame_paths, gemini_summary):
 
     payload = {
         "model": MODEL,
-        "max_tokens": 3000,
+        "max_tokens": 1500,
         "temperature": 0.3,
         "messages": [{"role": "user", "content": content}]
     }
