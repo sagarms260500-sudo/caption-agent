@@ -1,226 +1,156 @@
 STYLE_GUIDES = {
     "formal": (
-        "Professional, objective, factual. One or two calm sentences. "
-        "START with the visible subject. No jokes, no metadata, no guessing."
+        "Professional, objective, factual. One or two clear sentences. "
+        "Describe the subject with its key visual attributes, what it "
+        "does, and the setting. Include specific visible details."
     ),
     "sarcastic": (
         "Dry, ironic, lightly mocking but STILL ACCURATE. ONE sentence. "
-        "START with the visible subject. Deadpan understatement only."
+        "Deadpan understatement or mock grandeur about what is actually "
+        "happening. Must still describe what is in the video."
     ),
     "humorous_tech": (
-        "Funny tech metaphor mapped onto real video content. ONE or two short lines. "
-        "START with the visible subject, not jargon."
+        "Describe the subject first. Then wrap the scene in ONE natural "
+        "software, programming, AI, networking, robotics, or engineering "
+        "analogy that fits the scene. Do not stack multiple technical "
+        "metaphors. One or two short lines."
     ),
     "humorous_non_tech": (
-        "Funny everyday humour, ZERO technical words. ONE sentence. "
-        "START with the visible subject. Observational comedy only."
+        "Funny everyday humour, ZERO technical words of any kind. ONE "
+        "sentence. Observational comedy about what is actually visible."
     ),
 }
 
 GEMINI_PROMPT = """
-Return ONLY the following format.
+You are a careful video analyst. Watch this video and describe what is there.
 
-========================
-VERIFIED FACT SHEET
-========================
+Rules:
+- Name the main subject with obvious visual attributes, what it does, where.
+- Include only visually distinctive details that help uniquely identify the scene.
+  Prefer: colors, important objects, notable background elements, lighting,
+  weather, camera viewpoint.
+  Mention clothing only when it is essential for identifying the subject
+  or is the primary visual focus of the scene.
+- Do NOT guess place names, landmarks, brands, species or materials.
+- Never guess. If a detail is not visually certain, omit it from the main
+  sections. Put uncertain observations only under UNCERTAIN_OBSERVATIONS.
+- Report on-screen text ONLY if clearly legible. If text is partially
+  readable, blurry, distant, or obstructed, write "None" instead of guessing.
 
-PRIMARY SUBJECT
-- Main visible subject with 1–3 distinctive visual attributes.
+Return exactly:
 
-SECONDARY SUBJECTS
-- Other important people, animals, or objects.
-- Write "None" if there are none.
+MAIN_SUBJECT:
+The main subject with key visual attributes.
 
-ACTION
-- Main actions occurring in the video.
-- Use short bullet points.
+ACTION:
+What the subject does.
 
-SETTING
-- Describe only the visible environment.
-- Never guess city, country, landmark, or region.
+SETTING:
+Describe only the visible environment.
+Never infer the city, country, landmark, region, or venue.
 
-IMPORTANT OBJECTS
-- List only major objects that affect the scene.
+DISTINCTIVE_VISUAL_DETAILS:
+- detail
+- detail
+- detail
 
-DISTINCTIVE VISUAL DETAILS
-- Colors
-- Lighting
-- Weather
-- Camera angle
-- Motion
-- Anything visually important
+LIGHTING_AND_VIEW:
+- Lighting conditions
+- Viewpoint only if important to understanding the scene
 
-VISIBLE TEXT
-- Only clearly readable text.
-- Otherwise write "None".
+ON_SCREEN_TEXT:
+- clearly legible text, or "None"
 
-UNCERTAIN OBSERVATIONS
-- Anything that might be incorrect.
-- Write "None" if fully confident.
+UNCERTAIN_OBSERVATIONS:
+Only include observations that might be incorrect. Write "None" if fully confident.
 """
 
-QWEN_PROMPT = """You are an independent visual verifier.
+QWEN_PROMPT = """
+You are a fact-checker. Below is a description of a video. You see {n} frames from it.
 
-You receive:
-
-1. A VERIFIED FACT SHEET.
-2. {n} video frames.
-
-FACT SHEET
-
+DESCRIPTION:
 {summary}
 
-Your job is NOT to rewrite the fact sheet.
+Check the description against the frames. Report only:
 
-Your job is ONLY to identify mistakes.
+1. WRONG - statements the frames contradict (wrong color, wrong object, missing object)
+2. MISSING - OBVIOUS scene-level things a viewer would immediately notice
+3. RISKY - guesses rather than observations:
+   named places, cities, landmarks, brands from appearance ("Shibuya",
+   "Statue of Liberty", "Starbucks"), place-style qualifiers
+   ("Shibuya-style", "European-looking"), guessed language or script
+   ("South Asian text", "Japanese characters"), guessed ethnicity,
+   species or material names ("granite", "ginkgo"), text you cannot
+   clearly read in the frames
 
-Check:
+Never suggest adding speculative details simply to make the description
+more specific. If unsure, prefer omission over guessing.
+Never recommend adding details solely to make the description richer.
+Accuracy is more important than completeness.
 
-1. WRONG
-- incorrect objects
-- incorrect colors
-- incorrect actions
-- incorrect text
-- incorrect setting
-- incorrect numbers
+Also verify consistency. Check whether the fact sheet invents a different
+main subject than the one visible across the video. Do not report natural
+movement or temporary occlusion as WRONG.
 
-2. MISSING
-- obvious scene-level facts missing from the fact sheet
+Be conservative. Still frames cannot show motion or sound.
+Do not narrate your reasoning. Start directly with "WRONG:".
 
-3. RISKY
-Anything that appears to be a guess, including:
-
-- place names
-- cities
-- countries
-- landmarks
-- brands
-- occupations
-- identities
-- relationships
-- ethnicity
-- nationality
-- language
-- script
-- species
-- materials
-- unreadable text
-- exact numbers that are unclear
-
-Also verify consistency:
-
-- Did the subject change?
-- Were new objects invented?
-- Were important objects omitted?
-
-If yes, report under WRONG.
-
-Rules
-
-• Never rewrite the fact sheet.
-
-• Keep each section under five bullets.
-
-• Ignore insignificant details.
-
-Output ONLY
-
-WRONG:
-...
+WRONG
+- Only report facts that are clearly contradicted by the frames.
+- Do not report uncertain or ambiguous observations as WRONG.
 
 MISSING:
-...
+- obvious thing omitted (or "none")
 
 RISKY:
-...
+- guessed claim (or "none")
 """
 
 ACCURACY_RULES = """
 ACCURACY RULES:
-1. Every claim must come from the FACT SHEET. Never invent anything.
-2. SUBJECT-FIRST IS REQUIRED:
-   - Every caption must begin with the real visible subject in the first few words.
-   - Wrong openers:
-     "The macro lens..."
-     "Deployment initiated..."
-     "System scan..."
-     "This video shows..."
-     "The footage captures..."
-     "In this clip..."
-     "A scene of..."
-     "A view of..."
-3. ALWAYS name the subject with a clear visible attribute when available:
-   "a tan dog", "an orange kitten", "a city road", "a young woman at a computer".
-4. Include a few visual specifics: color, object, action, and setting.
-5. BANNED (these lose points):
-   - guessed place/city/country/region/landmark/brand names
-   - place-style / lookalike labels:
-     "Shibuya-style", "Tokyo-looking", "European-style", "South Asian-looking",
-     "looks like X", "X-style", "X-looking"
-   - guessed language/script/ethnicity/nationality/culture/region
-   - sensitive appearance wording unless essential
-   - exact numbers, IDs, signs, or text unless CONFIRMED and clearly legible
-   - quoted on-screen text unless CONFIRMED
-   - material or species guesses
-   - resolution, fps, duration, "N-second clip"
-   - audio/silence references
-   - clothing inventories (at most ONE distinctive item)
-6. If SOURCE B marks something RISKY, drop it completely.
-7. Short correct caption beats long caption with one error.
+1. Every claim must come from the VERIFIED FACT SHEET. Never invent anything.
+2. ALWAYS name the subject with its key visual attribute ("a tan dog",
+   "an orange kitten", "a woman in a red jacket").
+3. Include specific details only when they are clearly supported by the
+   VERIFIED FACT SHEET. Prefer omission over uncertain specificity.
+4. BANNED (these lose points):
+   - Guessed place/city/landmark/brand names, including qualifiers
+     like "X-style" or "resembling X"
+   - Guessed language, script, ethnicity, or region of origin
+   - Quoted on-screen text unless clearly legible in the fact sheet
+   - Material or species guesses stated as fact
+   - Resolution, fps, duration, "N-second clip"
+   - Audio/silence references ("no audio track", "silent mode")
+5. SUBJECT-FIRST: every caption must name the real subject in the first
+   few words. Never open with a camera part, a tech term, or abstract
+   framing.
 """
 
-REGISTER_EXAMPLES = """
-Register to match LENGTH and TONE only. Never copy content.
-
-formal: "A young orange tabby cat sits among dense green foliage,
-looking directly at the camera with an alert expression."
-
-sarcastic: "A cat outdoors, clearly plotting something elaborate
-and fully confident it will succeed."
-
-humorous_tech: "The cat has entered the garden like a freshly deployed
-agent scanning for input. Rollback plan: none."
-
-humorous_non_tech: "A tiny cat has gone outside and is now judging
-everything it sees with great authority."
-"""
 
 def build_caption_prompt(gemini_summary, qwen_report, styles):
     style_lines = "\n".join(f'- "{s}": {STYLE_GUIDES[s]}' for s in styles)
     keys = ", ".join(f'"{s}"' for s in styles)
 
     return f"""
-You are an expert caption writer. Two sources about ONE video.
+You are an expert caption writer. You have two sources about ONE video:
 
-VERIFIED FACT SHEET
-
+VERIFIED FACT SHEET (saw the full video):
 {gemini_summary}
 
-QWEN VALIDATION
-
+VISUAL VALIDATION (saw frames only, checked the fact sheet):
 {qwen_report}
 
-HOW TO USE BOTH SOURCES
+HOW TO RECONCILE:
+- If VISUAL VALIDATION says WRONG, trust it for visual facts.
+- If it says MISSING, add it only if it is an obvious visual fact and can
+  be included naturally without making the caption verbose.
+- If it says RISKY, DROP it entirely.
+- Never replace a dropped RISKY fact with a new guessed fact.
+- VISUAL VALIDATION cannot override the fact sheet about motion or actions.
 
-The VERIFIED FACT SHEET contains the visual observations.
-QWEN independently verified those observations.
-
-If QWEN marks something WRONG,
-correct it.
-
-If QWEN marks something MISSING,
-include it naturally.
-
-If QWEN marks something RISKY,
-remove it completely.
-
-Never invent replacement facts.
-
-Never introduce new objects.
-
-Never introduce new actions.
-
-All four captions must describe exactly the same video.
+All four captions MUST describe exactly the same video.
+Do not introduce new facts for one style.
+Do not remove important facts from another.
 Only the writing style changes.
 
 {ACCURACY_RULES}
@@ -228,43 +158,31 @@ Only the writing style changes.
 Write ONE caption per style:
 {style_lines}
 
-{REGISTER_EXAMPLES}
-STYLE CONSISTENCY
+STYLE RULES:
+- formal: 1-2 sentences. Be specific — include visible details that
+  distinguish this video from similar ones.
+- sarcastic: ONE sentence. Ironic but still tells you what is in the video.
+- humorous_tech: Subject first, then ONE tech analogy that fits the scene.
+- humorous_non_tech: ONE sentence. ZERO technical words of any kind
+  (no code, server, deploy, render, pipeline, node, fps, buffer, etc).
 
-Every caption MUST describe the identical video.
-Do not add new objects in one style.
-Do not remove major objects in another style.
-Do not change actions between styles.
-Only the writing style changes.
-
-LENGTH:
-- formal: 1-2 sentences, 25-35 words, concise
-- sarcastic: ONE sentence, 10-20 words
-- humorous_tech: 1-2 short lines, 15-25 words, subject first
-- humorous_non_tech: ONE sentence, 10-20 words, ZERO technical words
-
-FINAL VALIDATION
-
-Before returning JSON verify every caption:
-
-✓ Starts with the visible subject.
-✓ Uses only facts from the VERIFIED FACT SHEET.
-✓ Applies every QWEN correction.
-✓ Contains no RISKY items.
-✓ Contains no guessed places.
-✓ Contains no guessed brands.
-✓ Contains no guessed occupations.
-✓ Contains no guessed identities.
-✓ Contains no guessed language or script.
-✓ Contains no guessed species.
-✓ Contains no metadata.
-✓ Contains no audio references.
-✓ Uses the requested writing style.
-✓ Describes exactly the same scene as the other three captions.
-
-If any check fails,
-rewrite ONLY that caption.
-Return ONLY the JSON object.
+FINAL VALIDATION — before returning JSON, verify:
+- every caption begins with the visible subject
+- every caption describes exactly the same verified facts
+- only wording and tone differ
+- no caption omits the primary subject or primary action
+- no caption introduces new facts
+- no caption introduces new objects
+- no caption introduces new actions
+- no caption introduces places
+- no caption introduces brands
+- no caption introduces occupations
+- no caption introduces identities
+- no caption introduces emotions
+- no caption introduces unreadable text
+- no caption contains any RISKY item
+- each caption satisfies its requested style
+If any check fails, rewrite ONLY that caption.
 
 OUTPUT: ONLY a raw JSON object with keys: {keys}
 """
