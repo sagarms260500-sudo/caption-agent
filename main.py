@@ -20,7 +20,7 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
-MAX_FRAMES = 8
+MAX_FRAMES = 6
 FRAME_SIZE = 768
 TIMEOUT = int(os.environ.get("HARD_TIMEOUT", "540"))
 FALLBACK = "A short video clip."
@@ -169,7 +169,7 @@ def main():
             _flush_results()
             print(f"[checkpoint] {done['n']}/{len(tasks)}")
 
-    with ThreadPoolExecutor(max_workers=5) as pool:
+    with ThreadPoolExecutor(max_workers=6) as pool:
         futs = [pool.submit(run, i, t) for i, t in enumerate(tasks)]
         for f in as_completed(futs):
             if f.exception():
