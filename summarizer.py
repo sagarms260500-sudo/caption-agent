@@ -13,7 +13,10 @@ def create_client(api_key):
 def summarize(client, video_path):
     uploaded = client.files.upload(file=video_path)
     try:
+        wait_start = time.time()
         while getattr(uploaded.state, "name", str(uploaded.state)) == "PROCESSING":
+            if time.time() - wait_start > 120:
+                raise RuntimeError("Gemini processing timed out after 120s")
             time.sleep(4)
             uploaded = client.files.get(name=uploaded.name)
 
