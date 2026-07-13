@@ -1,3 +1,59 @@
+STYLE_GUIDES = {
+    "formal": (
+        "ONE clean sentence (two only if genuinely needed). Subject with "
+        "one visual attribute, its action, and the setting, fused into a "
+        "single clause. No preamble, no 'the video shows', no listing of "
+        "every detail. Neutral, descriptive, documentary tone.\n"
+        "Example: 'A wide urban boulevard lined with golden ginkgo trees "
+        "in full autumn foliage, with multiple lanes of traffic flowing "
+        "through the city below high-rise residential buildings.'\n"
+        "Example: 'A young orange tabby kitten sits among dense green "
+        "foliage in an outdoor setting, looking directly at the camera "
+        "with an alert and curious expression.'"
+    ),
+    "sarcastic": (
+        "ONE sentence. Dry, deadpan, ironic — mock grandeur or mock "
+        "understatement about what is actually happening. The joke comes "
+        "from the gap between the flat tone and the mundane reality, not "
+        "from exaggeration of the facts. It must still be possible to "
+        "tell what is in the video from the sentence alone.\n"
+        "Example: 'A kitten outdoors, clearly plotting something "
+        "elaborate and fully confident it will succeed.'\n"
+        "Example: 'A person at a computer, apparently working, which is "
+        "exactly what someone would do if they were not working.'"
+    ),
+    "humorous_tech": (
+        "ONE to two short lines. Build a small absurdist scenario from "
+        "software/engineering/AI life (a bug, a deploy, an agent, a "
+        "stack trace, a rollback, a system update) that maps onto what "
+        "is visually happening, rather than literally describing the "
+        "subject and then bolting on a metaphor. The subject should be "
+        "recognizable through the analogy, not necessarily named first. "
+        "Exactly ONE technical frame — do not mix, e.g., networking and "
+        "robotics in the same caption.\n"
+        "Example: 'She has been staring at this bug for forty minutes. "
+        "The bug is a missing comma. The comma is winning.'\n"
+        "Example: \"Nature's annual deployment: all leaf nodes updated "
+        "to yellow simultaneously, no breaking changes reported.\"\n"
+        "Example: 'A small autonomous agent has entered the garden "
+        "environment and is scanning for input. Next action: unknown. "
+        "Rollback plan: none.'"
+    ),
+    "humorous_non_tech": (
+        "ONE sentence. Zero technical vocabulary of any kind (no code, "
+        "server, deploy, render, pipeline, node, agent, system, bug, "
+        "etc.). The humor comes from mildly exaggerating the stakes, "
+        "effort, judgment, or importance of something mundane and "
+        "visible in the frame — observational, relatable, slightly "
+        "self-deprecating in spirit.\n"
+        "Example: 'A tiny cat has gone outside and is now judging "
+        "everything it sees with great authority.'\n"
+        "Example: 'A woman at a computer, visibly handling something "
+        "extremely important that will be completely forgotten by "
+        "Thursday.'"
+    ),
+}
+
 GEMINI_PROMPT = """
 You are a careful video analyst. Watch this video and describe what is there.
 
@@ -82,61 +138,6 @@ MISSING:
 RISKY:
 - guessed claim (or "none")
 """
-STYLE_GUIDES = {
-    "formal": (
-        "ONE clean sentence (two only if genuinely needed). Subject with "
-        "one visual attribute, its action, and the setting, fused into a "
-        "single clause. No preamble, no 'the video shows', no listing of "
-        "every detail. Neutral, descriptive, documentary tone.\n"
-        "Example: 'A wide urban boulevard lined with golden ginkgo trees "
-        "in full autumn foliage, with multiple lanes of traffic flowing "
-        "through the city below high-rise residential buildings.'\n"
-        "Example: 'A young orange tabby kitten sits among dense green "
-        "foliage in an outdoor setting, looking directly at the camera "
-        "with an alert and curious expression.'"
-    ),
-    "sarcastic": (
-        "ONE sentence. Dry, deadpan, ironic — mock grandeur or mock "
-        "understatement about what is actually happening. The joke comes "
-        "from the gap between the flat tone and the mundane reality, not "
-        "from exaggeration of the facts. It must still be possible to "
-        "tell what is in the video from the sentence alone.\n"
-        "Example: 'A kitten outdoors, clearly plotting something "
-        "elaborate and fully confident it will succeed.'\n"
-        "Example: 'A person at a computer, apparently working, which is "
-        "exactly what someone would do if they were not working.'"
-    ),
-    "humorous_tech": (
-        "ONE to two short lines. Build a small absurdist scenario from "
-        "software/engineering/AI life (a bug, a deploy, an agent, a "
-        "stack trace, a rollback, a system update) that maps onto what "
-        "is visually happening, rather than literally describing the "
-        "subject and then bolting on a metaphor. The subject should be "
-        "recognizable through the analogy, not necessarily named first. "
-        "Exactly ONE technical frame — do not mix, e.g., networking and "
-        "robotics in the same caption.\n"
-        "Example: 'She has been staring at this bug for forty minutes. "
-        "The bug is a missing comma. The comma is winning.'\n"
-        "Example: \"Nature's annual deployment: all leaf nodes updated "
-        "to yellow simultaneously, no breaking changes reported.\"\n"
-        "Example: 'A small autonomous agent has entered the garden "
-        "environment and is scanning for input. Next action: unknown. "
-        "Rollback plan: none.'"
-    ),
-    "humorous_non_tech": (
-        "ONE sentence. Zero technical vocabulary of any kind (no code, "
-        "server, deploy, render, pipeline, node, agent, system, bug, "
-        "etc.). The humor comes from mildly exaggerating the stakes, "
-        "effort, judgment, or importance of something mundane and "
-        "visible in the frame — observational, relatable, slightly "
-        "self-deprecating in spirit.\n"
-        "Example: 'A tiny cat has gone outside and is now judging "
-        "everything it sees with great authority.'\n"
-        "Example: 'A woman at a computer, visibly handling something "
-        "extremely important that will be completely forgotten by "
-        "Thursday.'"
-    ),
-}
 
 ACCURACY_RULES = """
 ACCURACY RULES:
@@ -262,5 +263,4 @@ If not, rewrite only that caption.
 
 Return ONLY the JSON. No text before or after it, no markdown fences.
 OUTPUT: a raw JSON object with keys: {keys}
-"""w JSON object with keys: {keys}
 """
