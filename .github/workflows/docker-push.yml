@@ -21,7 +21,7 @@ jobs:
           context: .
           push: true
           platforms: linux/amd64
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/caption-agent:v5
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/caption-agent:v6
           build-args: |
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
             OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
