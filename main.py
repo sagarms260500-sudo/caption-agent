@@ -21,7 +21,7 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
-MAX_FRAMES = 5
+MAX_FRAMES = 12
 FRAME_SIZE = 768
 TIMEOUT = int(os.environ.get("HARD_TIMEOUT", "540"))
 FALLBACK = "A short video clip."
