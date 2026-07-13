@@ -1,11 +1,11 @@
 STYLE_GUIDES = {
     "formal": (
-        "Professional, objective, factual. One or two clear sentences. "
+        "Professional, objective, factual. One or two clear and crisp sentences. "
         "Describe the subject with its key visual attributes, what it "
         "does, and the setting. Include specific visible details."
     ),
     "sarcastic": (
-        "Dry, ironic, lightly mocking but STILL ACCURATE. ONE sentence. "
+        "Dry, ironic, lightly mocking but STILL ACCURATE. ONE crisp sentence. "
         "Deadpan understatement or mock grandeur about what is actually "
         "happening. Must still describe what is in the video."
     ),
@@ -13,11 +13,10 @@ STYLE_GUIDES = {
         "Describe the subject first. Then wrap the scene in ONE natural "
         "software, programming, AI, networking, robotics, or engineering "
         "analogy that fits the scene. Do not stack multiple technical "
-        "metaphors. One or two short lines."
+        "metaphors. One or two crisp short lines."
     ),
     "humorous_non_tech": (
-        "Funny everyday humour, ZERO technical words of any kind. ONE "
-        "sentence. Observational comedy about what is actually visible."
+        "Funny everyday humour, ZERO technical words of any kind. ONE crisp sentence. Observational comedy about what is actually visible."
     ),
 }
 
