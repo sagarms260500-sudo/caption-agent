@@ -111,8 +111,11 @@ ACCURACY RULES:
 1. Every claim must come from the VERIFIED FACT SHEET. Never invent anything.
 2. ALWAYS name the subject with its key visual attribute ("a tan dog",
    "an orange kitten", "a woman in a red jacket").
-3. Include specific details only when they are clearly supported by the
-   VERIFIED FACT SHEET. Prefer omission over uncertain specificity.
+3. Include only the 2–4 most visually distinctive details that are clearly
+    visible throughout the clip.
+    Prefer omission over uncertain specificity.
+    Do not mention clothing, jewelry, text, numbers, advertisements,
+or appearance unless they are central to understanding the scene.
 4. BANNED (these lose points):
    - Guessed place/city/landmark/brand names, including qualifiers
      like "X-style" or "resembling X"
