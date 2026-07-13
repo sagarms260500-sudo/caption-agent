@@ -46,7 +46,7 @@ def summarize(client, video_path):
     try:
         wait_start = time.time()
         while getattr(uploaded.state, "name", str(uploaded.state)) == "PROCESSING":
-            if time.time() - wait_start > 150:
+            if time.time() - wait_start > 180:
                 raise RuntimeError("Gemini processing timed out")
             time.sleep(4)
             uploaded = client.files.get(name=uploaded.name)
