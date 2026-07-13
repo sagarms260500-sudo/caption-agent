@@ -143,7 +143,7 @@ def main():
     print("=" * 50)
 
     tasks = json.loads(Path(TASKS_PATH).read_text())
-    print(f"Loaded {len(tasks)} task(s) | workers: 6")
+    print(f"Loaded {len(tasks)} task(s) | workers: 7")
 
     check_keys()
     gemini_client = summarizer.create_client(GEMINI_API_KEY)
@@ -171,7 +171,7 @@ def main():
             elapsed = time.time() - start
             print(f"[checkpoint] {done}/{len(tasks)} @ {elapsed:.0f}s")
 
-    with ThreadPoolExecutor(max_workers=6) as pool:
+    with ThreadPoolExecutor(max_workers=7) as pool:
         futs = [pool.submit(run, i, t) for i, t in enumerate(tasks)]
         for f in as_completed(futs):
             if f.exception():
