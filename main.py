@@ -20,7 +20,7 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
-MAX_FRAMES = 12
+MAX_FRAMES = 8
 FRAME_SIZE = 768
 TIMEOUT = int(os.environ.get("HARD_TIMEOUT", "540"))
 FALLBACK = "A short video clip."
@@ -131,6 +131,9 @@ def write_results(results):
     os.replace(tmp, path)
 
 
+_state = {"tasks": [], "results": [], "lock": threading.Lock()}
+
+
 def main():
     print("=" * 50)
     print("VIDEO CAPTION AGENT")
@@ -145,8 +148,11 @@ def main():
     print("Keys OK\n")
 
     results = [None] * len(tasks)
-    lock = threading.Lock()
+    lock = _state["lock"]
     done = {"n": 0}
+
+    _state["tasks"] = tasks
+    _state["results"] = results
 
     def run(i, task):
         task.setdefault("task_id", f"task_{i + 1}")
@@ -160,7 +166,7 @@ def main():
         with lock:
             results[i] = res
             done["n"] += 1
-            write_results([r for r in results if r is not None])
+            _flush_results()
             print(f"[checkpoint] {done['n']}/{len(tasks)}")
 
     with ThreadPoolExecutor(max_workers=8) as pool:
@@ -169,13 +175,36 @@ def main():
             if f.exception():
                 print(f"[error] {f.exception()}")
 
+    _fill_missing()
+    _flush_results()
+    print(f"\nDONE - {len(tasks)}/{len(tasks)} -> {RESULTS_PATH}")
+
+
+def _fill_missing():
+    tasks = _state["tasks"]
+    results = _state["results"]
+    for i, task in enumerate(tasks):
+        if results[i] is None:
+            tid = str(task.get("task_id", f"task_{i + 1}"))
+            styles = task.get("styles") or STYLES
+            results[i] = {"task_id": tid,
+                          "captions": {s: FALLBACK for s in styles}}
+            print(f"[rescue] {tid} filled with fallback")
+
+
+def _flush_results():
+    results = _state["results"]
     write_results([r for r in results if r is not None])
-    print(f"\nDONE - {done['n']}/{len(tasks)} -> {RESULTS_PATH}")
 
 
 if __name__ == "__main__":
     def _timeout(signum, frame):
-        print("\n[TIMEOUT] exiting")
+        print("\n[TIMEOUT] filling missing tasks and exiting")
+        try:
+            _fill_missing()
+            _flush_results()
+        except Exception:
+            pass
         os._exit(0)
 
     if hasattr(signal, "SIGALRM"):
