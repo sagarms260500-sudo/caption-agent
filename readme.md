@@ -4,6 +4,14 @@ Three AI models. One verified caption.
 
 **Gemini** watches the video → **Qwen** validates against frames → **Claude** writes four styled captions.
 
+##Architecture:
+Video input
+   -> Gemini video understanding
+   -> OpenCV frame extraction
+   -> Qwen visual validation
+   -> Claude styled caption generation
+   -> JSON result output
+
 ## How it works
 
 1. **Gemini 3.5 Flash** analyzes the full video and produces a scene-level summary — subject, action, setting, visual details, camera work.
@@ -14,7 +22,9 @@ Three AI models. One verified caption.
 
 ## What makes it different
 
-Every other team trusts a single model. If it says "brown dog" when the dog is cream-colored, all four captions carry that error. EyeQ 3 catches it — Qwen sees the frames independently, flags the mismatch, and Claude uses the corrected version.
+Unlike a single-model captioning flow, EyeQ 3 uses an additional validation step to reduce visual hallucinations before writing final captions. If it says "brown dog" when the dog is cream-colored, all four captions carry that error. EyeQ 3 catches it — Qwen sees the frames independently, flags the mismatch, and Claude uses the corrected version.
+
+##NOTE: API keys, evaluation outputs, logs, and private credentials are excluded from this repository.
 
 ## Files
 
@@ -37,11 +47,21 @@ python main.py
 ```
 
 Reads `/input/tasks.json`, writes `/output/results.json`.
+```
+Input json
+[
+  {
+    "task_id": "v1",
+    "video_url": "https://example.com/video.mp4",
+    "styles": ["formal", "sarcastic", "humorous_tech", "humorous_non_tech"]
+  }
+]
 
+```
 ## Docker
 
 ```
-docker.io/sagar2652/caption-agent:latest
+docker.io/sagar2652/caption-agent:v11
 ```
 
 ## Track 2 — AMD Developer Hackathon
